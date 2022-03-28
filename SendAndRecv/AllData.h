@@ -12,13 +12,11 @@ namespace NetWork
 	};
 	typedef struct _messageData
 	{
-		//std::string messageHead;
-		std::string message;
-		//std::string messageEnd;
-		std::string sendIPv4;
-		std::wstring sendIPv6;
+		char* message[1024];
+		char sendIPv4[64];
+		wchar_t sendIPv6[64];
 		int sendPort;
-	}messageData, *PMessageData;
+	}messageData, * PMessageData;
 }
 
 #endif // !_ALL_DATA_H_

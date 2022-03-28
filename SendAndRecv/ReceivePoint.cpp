@@ -15,7 +15,7 @@ NetWork::receivePoint::_receive_point = nullptr;
 std::mutex
 NetWork::receivePoint::_mx;
 
-NetWork::receivePoint* 
+NetWork::receivePoint*
 NetWork::receivePoint::
 getInstance(void)
 {// 线程安全的单例模式
@@ -30,7 +30,7 @@ getInstance(void)
 	return _receive_point;
 }
 
-void 
+void
 NetWork::receivePoint::
 deleteInstance(void)
 {
@@ -42,7 +42,7 @@ deleteInstance(void)
 	}
 }
 
-void 
+void
 NetWork::receivePoint::
 startServer(void)
 {
@@ -98,7 +98,7 @@ startServer(void)
 	}
 }
 
-void 
+void
 NetWork::receivePoint::
 runEvent(void)
 {
@@ -137,11 +137,16 @@ runEvent(void)
 						std::cout << "Open Error" << std::endl;
 						continue;
 					}
-					if (fs.is_open())
+					int count = 0;
+					while (rcv->message[count])
 					{
-						fs.write(rcv->message.c_str(), rcv->message.size());
-						fs.close();
+						if (fs.is_open())
+						{
+							fs.write(rcv->message[count], 1024);
+							++count;
+						}
 					}
+					fs.close();
 					// 转换编码并拷贝到剪贴板
 					transCode();
 					//int send_len = ::send(sock_complete, "Exit!", strlen("Exit!") + 1, 0);
@@ -152,7 +157,7 @@ runEvent(void)
 
 					// 重新启动接收
 					int ret = ::WSARecv(sock_complete, &wsa_buf, 1, &received_count,
-							&flags, &overlapped, nullptr);
+						&flags, &overlapped, nullptr);
 					if (ret != 0)
 					{// WSARecv接收成功返回0
 						int i = ::WSAGetLastError();
@@ -162,10 +167,10 @@ runEvent(void)
 			}
 			::closesocket(sock_complete);
 		});
-	
+
 }
 
-void 
+void
 NetWork::receivePoint::
 getIp(std::string& str, int iResult)
 {
@@ -236,7 +241,7 @@ getIp(std::string& str, int iResult)
 	freeaddrinfo(result);
 }
 
-void 
+void
 NetWork::receivePoint::
 transCode(void)
 {
@@ -267,7 +272,7 @@ transCode(void)
 	return;
 }
 
-bool 
+bool
 NetWork::receivePoint::
 sendToClip(const wchar_t* data_str)
 {
@@ -300,7 +305,7 @@ sendToClip(const wchar_t* data_str)
 }
 
 NetWork::receivePoint::
-receivePoint(): _thdPool(10)
+receivePoint() : _thdPool(10)
 {
 	int wsaResult = WSAStartup(MAKEWORD(2, 2), &_wsaData);
 	if (wsaResult != 0)

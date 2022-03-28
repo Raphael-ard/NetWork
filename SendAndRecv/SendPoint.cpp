@@ -21,11 +21,20 @@ sendPoint(void)
 		return;
 	_path = getMyDirectory();
 	_mData = (PMessageData)malloc(sizeof(messageData));
+	memset(_mData->sendIPv4, 0, 64);
+	memset(_mData->sendIPv6, 0, 64);
+	memset(_mData->message, 0, 1024);
 }
 
 NetWork::sendPoint::
 ~sendPoint(void)
 {
+	free(_mData->sendIPv4);
+	free(_mData->sendIPv6);
+	free(_mData->message);
+	free(_mData);
+	_mData = nullptr;
+
 	CloseHandle(m_hDirectory);
 	CloseHandle(hFile);
 	::closesocket(_sock);
@@ -62,6 +71,17 @@ startConnect(void)
 		listenFile();
 		// 开始发送消息
 		int len = ::send(_sock, reinterpret_cast<char*>(_mData), sizeof(_mData), 0);
+		if (len < 0)
+		{
+			printf("Send Error: %d", len);
+		}
+		int count = 0;
+		while (_mData->message[count])
+		{
+			free(_mData->message[count]);
+			_mData->message[count] = nullptr;
+			++count;
+		}
 	}
 	
 }
@@ -156,12 +176,14 @@ listenFile(void)
 					std::cout << "Open Error" << std::endl;
 					continue;
 				}
-
+				int count = 0;
 				while (!fs.eof())
 				{
 					char* temp = (char*)malloc(sizeof(char)*1024);
+					memset(temp, 0, 1024);
 					fs.read(temp, 1024);
-					_mData->message.append(temp);
+					_mData->message[count] = temp;
+					++count;
 				}
 				fs.close();
 				return;
@@ -216,7 +238,9 @@ getIP(void)
 		case AF_INET:
 			printf("AF_INET (IPv4)\n");
 			sockaddr_ipv4 = (struct sockaddr_in*)ptr->ai_addr;
-			_mData->sendIPv4.append(inet_ntoa(sockaddr_ipv4->sin_addr));
+			strncpy_s(_mData->sendIPv4, 64, inet_ntoa(sockaddr_ipv4->sin_addr), 
+				strlen(inet_ntoa(sockaddr_ipv4->sin_addr)) + 1);
+
 			printf("IPv4 address %s\n", _mData->sendIPv4);
 			break;
 		case AF_INET6:
@@ -230,7 +254,7 @@ getIP(void)
 			else
 			{
 				std::wcout << L"IPv6 address  " << ipstringbuffer << std::endl;
-				_mData->sendIPv6.append(ipstringbuffer);
+				wcsncpy_s(_mData->sendIPv6, 64, ipstringbuffer, wcslen(ipstringbuffer) + 1);
 			}
 			break;
 		case AF_NETBIOS:

@@ -22,14 +22,14 @@ namespace NetWork
 		void getIP(void);
 
 	private:
-		WSADATA					_wsaData;
-		SOCKET					_sock;
-		sockaddr_in				_addr{ 0 };
-		std::wstring			_path;
-		HANDLE					m_hDirectory;
-		HANDLE					hFile;
-		FILE_NOTIFY_INFORMATION* pNotification;
-		char					notify[1024];
+		WSADATA							_wsaData;
+		SOCKET							_sock;
+		sockaddr_in						_addr{ 0 };
+		std::wstring					_path;
+		HANDLE							m_hDirectory;
+		HANDLE							hFile;
+		FILE_NOTIFY_INFORMATION*		pNotification;
+		char							notify[1024];
 		NetWork::PMessageData			_mData;
 	};
 }
