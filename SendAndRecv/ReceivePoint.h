@@ -4,8 +4,6 @@
 
 #include <mutex>
 #include <winsock2.h>
-#include <unordered_map>
-#include <vector>
 
 #include "UserId.h"
 #include "ThreadPool.h"
@@ -16,9 +14,8 @@ namespace NetWork
 	class receivePoint
 	{
 	public:
-		static receivePoint* getInstance(void);
-		static void deleteInstance(void);
-
+		static receivePoint* getInstace(void);
+		static void destoryIns(void);
 		void startServer(void);
 		
 	private:
@@ -29,13 +26,14 @@ namespace NetWork
 
 	private:
 		receivePoint(void);
+		~receivePoint(void);
 		receivePoint(receivePoint const&) = delete;
 		receivePoint(receivePoint&&) = delete;
-		~receivePoint(void);
+
 
 	private:
-		static receivePoint*						_receive_point;
 		static std::mutex							_mx;
+		static receivePoint*						_rcvPoint;
 
 		WSADATA										_wsaData;
 		SOCKET										_sock;

@@ -1,37 +1,63 @@
 #include "PointManager.h"
+#include "SendPoint.h"
 
-NetWork::pointManager* 
-NetWork::pointManager::_pointMgr = nullptr;
+std::shared_ptr<NetWork::pointManager>
+NetWork::pointManager::_pMgr;
 
-std::mutex
-NetWork::pointManager::_mx;
-
-NetWork::pointManager* 
+std::shared_ptr<NetWork::pointManager>
 NetWork::pointManager::
 getInstance(void)
 {
-	if (_pointMgr == nullptr)
-	{
-		std::unique_lock lck(_mx);
-		if (_pointMgr == nullptr)
-		{
-			_pointMgr = new pointManager();
-		}
-	}
-	return _pointMgr;
+	if (!_pMgr)
+		_pMgr.reset(new NetWork::pointManager, &NetWork::pointManager::destory);
+	return _pMgr;
 }
 
 void 
 NetWork::pointManager::
 deleteInstance(void)
 {
-	std::unique_lock lck(_mx);
-	if (_pointMgr != nullptr)
+	if (_pMgr)
+		_pMgr.reset();
+}
+
+void 
+NetWork::pointManager::
+addSendPoint(std::shared_ptr<sendPoint> sPoint)
+{
+	if (!sPoint)
+		return;
+	_lstSPoint.emplace_back(sPoint);
+}
+
+void 
+NetWork::pointManager::
+removeSendPoint(std::shared_ptr<sendPoint> sPoint)
+{
+	if (!sPoint)
+		return;
+	if (!_lstSPoint.empty())
+		return;
+	for (auto it = _lstSPoint.begin(); it != _lstSPoint.end();)
 	{
-		delete _pointMgr;
-		_pointMgr = nullptr;
+		if (*it == sPoint)
+		{
+			it = _lstSPoint.erase(it)
+				;
+			continue;
+		}
+		++it;
 	}
 }
+
+void 
+NetWork::pointManager::
+clearSendPoint(void)
+{
+	_lstSPoint.clear();
+}
+
+
 
 NetWork::pointManager::
 pointManager(void)
@@ -41,4 +67,12 @@ pointManager(void)
 NetWork::pointManager::
 ~pointManager(void)
 {
+}
+
+void 
+NetWork::pointManager::
+destory(pointManager* pMgr)
+{
+	if (pMgr)
+		delete pMgr;
 }

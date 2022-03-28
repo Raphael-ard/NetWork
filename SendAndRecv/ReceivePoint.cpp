@@ -10,36 +10,34 @@
 #define _max_size 1024
 
 NetWork::receivePoint*
-NetWork::receivePoint::_receive_point = nullptr;
+NetWork::receivePoint::_rcvPoint = nullptr;
 
 std::mutex
 NetWork::receivePoint::_mx;
 
-NetWork::receivePoint*
+NetWork::receivePoint* 
 NetWork::receivePoint::
-getInstance(void)
-{// 线程安全的单例模式
-	if (_receive_point == nullptr)
+getInstace(void)
+{
+	if (_rcvPoint == nullptr)
 	{
 		std::unique_lock lck(_mx);
-		if (_receive_point == nullptr)
+		if (_rcvPoint == nullptr)
 		{
-			_receive_point = new receivePoint();
+			_rcvPoint = new NetWork::receivePoint();
 		}
 	}
-	return _receive_point;
+	return _rcvPoint;
 }
 
-void
+void 
 NetWork::receivePoint::
-deleteInstance(void)
+destoryIns(void)
 {
-	std::unique_lock<std::mutex> lck(_mx);
-	if (_receive_point != nullptr)
-	{
-		delete _receive_point;
-		_receive_point = nullptr;
-	}
+	std::unique_lock lck(_mx);
+	if (_rcvPoint != nullptr)
+		delete _rcvPoint;
+	_rcvPoint = nullptr;
 }
 
 void
