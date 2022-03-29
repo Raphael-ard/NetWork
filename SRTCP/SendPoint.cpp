@@ -54,8 +54,8 @@ startConnect(void)
 	if (::connect(_sock, reinterpret_cast<const sockaddr*>(&_addr),
 		sizeof _addr) == SOCKET_ERROR)
 	{
-		auto x = ::GetLastError();
-		printf("Error: \n", x);
+		int x = ::GetLastError();
+		printf("Error: %d\n", x);
 	}
 	::send(_sock, "Connect the Send!", strlen("Connect the Send!") + 1, 0);
 	char buf[1024] = { 0 };

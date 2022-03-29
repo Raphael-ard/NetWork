@@ -11,7 +11,6 @@ namespace NetWork
 	enum statusData
 	{
 		ConnectSuccess = 1,
-
 	};
 	typedef struct _messageData
 	{
@@ -89,6 +88,8 @@ namespace NetWork
 		struct addrinfo* ptr = NULL;
 		struct addrinfo hints;
 
+		/*in_addr*		inAddr;
+		char str[64] = { 0 };*/
 		struct sockaddr_in* sockaddr_ipv4;
 		//    struct sockaddr_in6 *sockaddr_ipv6;
 		LPSOCKADDR sockaddr_ip;
@@ -123,6 +124,10 @@ namespace NetWork
 				break;
 			case AF_INET:
 				printf("AF_INET (IPv4)\n");
+				/*inAddr = reinterpret_cast<in_addr*>(ptr->ai_addr);
+				::inet_ntop(AF_INET, inAddr, str, 64);
+				printf("IPv4 address %s\n", str);
+				IPv4.assign(str);*/
 				sockaddr_ipv4 = (struct sockaddr_in*)ptr->ai_addr;
 				IPv4.assign(inet_ntoa(sockaddr_ipv4->sin_addr));
 				printf("IPv4 address %s\n", IPv4.c_str());

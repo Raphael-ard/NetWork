@@ -7,7 +7,6 @@
 #include <mswsock.h>
 
 #include "AllData.h"
-#include "UserId.h"
 #include "ThreadPool.h"
 
 namespace NetWork
