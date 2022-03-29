@@ -23,6 +23,13 @@ deleteInstance(void)
 
 void 
 NetWork::pointManager::
+runProgress(void)
+{
+	(*_lstSPoint.back()).startConnect();
+}
+
+void
+NetWork::pointManager::
 addSendPoint(std::shared_ptr<sendPoint> sPoint)
 {
 	if (!sPoint)

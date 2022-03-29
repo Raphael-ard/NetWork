@@ -1,5 +1,4 @@
 #include "ReceivePoint.h"
-#include "AllData.h"
 
 #include <ws2tcpip.h>
 #include <iostream>
@@ -7,6 +6,9 @@
 
 #pragma comment(lib, "Ws2_32.lib")
 
+#define READ 0
+#define WRITE 1
+#define ACCEPT 2
 #define _max_size 1024
 
 NetWork::receivePoint*
@@ -15,7 +17,7 @@ NetWork::receivePoint::_rcvPoint = nullptr;
 std::mutex
 NetWork::receivePoint::_mx;
 
-NetWork::receivePoint* 
+NetWork::receivePoint*
 NetWork::receivePoint::
 getInstace(void)
 {
@@ -30,7 +32,7 @@ getInstace(void)
 	return _rcvPoint;
 }
 
-void 
+void
 NetWork::receivePoint::
 destoryIns(void)
 {
@@ -42,201 +44,239 @@ destoryIns(void)
 
 void
 NetWork::receivePoint::
-startServer(void)
+startReceiver(void)
 {
-	runEvent();
+	//准备调用 AcceptEx 函数，该函数使用重叠结构并于完成端口连接
+	NetWork::PIOData perIoData = (NetWork::PIOData)GlobalAlloc(GPTR, sizeof(NetWork::IOData));
+	memset(&(perIoData->overlapped), 0, sizeof(OVERLAPPED));
+	perIoData->buf.buf = perIoData->dataBuffer;
+	perIoData->buf.len = perIoData->dataLength = _max_size;
+	perIoData->operatorType = ACCEPT;
+	//在使用AcceptEx前需要事先重建一个套接字用于其第二个参数。这样目的是节省时间
+	//通常可以创建一个套接字库
+	perIoData->csock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
 
-	//异步io，非异步选择
-	while (true)
+	DWORD flags = 0;
+
+	//调用AcceptEx函数，地址长度需要在原有的上面加上16个字节
+	//注意这里使用了重叠模型，该函数的完成将在与完成端口关联的工作线程中处理
+	std::cout << "Process AcceptEx function wait for send connect..." << std::endl;
+	int rc = lpfnAcceptEx(_sock, perIoData->csock,
+		perIoData->dataBuffer, 0
+		/*perIoData->dataLength - ((sizeof(SOCKADDR_IN) + 16) * 2)*/,
+		sizeof(SOCKADDR_IN) + 16, sizeof(SOCKADDR_IN) + 16, &flags,
+		&(perIoData->overlapped));
+	if (rc == FALSE)
 	{
-		sockaddr_in addr_clnt{ 0 };
-		int clnt_len = sizeof(addr_clnt);
-
-		SOCKET sock_work = ::accept(_sock,
-			reinterpret_cast<sockaddr*>(&addr_clnt),
-			&clnt_len);
-
-		remove(TAR);
-
-		/* INVALID_SOCKET是判断套接字是否成功，SOCKET_ERROR是判断调用函数是否成功 */
-		if (sock_work == INVALID_SOCKET)
-			return;
-
-		/* print address */
-		char addr_str[46] = "";
-		InetNtopA(AF_INET, (void*)&addr_clnt.sin_addr, addr_str, 46);
-		printf("client address: %s\t port: %i\n", addr_str, ::ntohs(addr_clnt.sin_port));
-
-		/* send & receive */
-		int send_len = ::send(sock_work, "Connect to Server!", strlen("Connect to Server!") + 1, 0);
-		if (send_len == SOCKET_ERROR)
-			return;
-
-		char* buf = new char[_max_size] { 0 };
-		//int recv_len = ::recv(sock_work, buf, 100, 0);
-		//---overlappedio自动接收---
-		WSABUF wsa_buf;
-		wsa_buf.len = _max_size;
-		wsa_buf.buf = buf;
-		DWORD received_count = 0l;
-		OVERLAPPED overlapped;
-		overlapped.hEvent = ::WSACreateEvent();   //异步选择，统一等待
-		overlapped.Pointer = buf;  //带入参数，同时以相同方式带出参数
-		DWORD flags = 0;
-		int ret = ::WSARecv(sock_work, &wsa_buf, 1, &received_count,
-			&flags, &overlapped, nullptr);
-
-		if (ret != 0)
-		{// WSARecv接收成功返回0
-			int i = ::WSAGetLastError();
-			/*return i;*/
-		}
-		::CreateIoCompletionPort(reinterpret_cast<HANDLE>(sock_work),
-			_hIocp, static_cast<ULONG_PTR>(sock_work), 0);
+		if (WSAGetLastError() != ERROR_IO_PENDING)
+			std::cout << "lpfnAcceptEx failed.." << std::endl;
 	}
 }
 
 void
 NetWork::receivePoint::
-runEvent(void)
+threadEvent(void)
 {
 	_thdPool.addTask([this](void) -> void
 		{
-			DWORD cReceived = 0;
-			SOCKET sock_complete = INVALID_SOCKET;
-			LPOVERLAPPED poverlapped_data;
-			std::fstream fs;
-			char buf[_max_size]{ 0 };
-			//int recv_len = ::recv(sock_work, buf, 100, 0);
-			//---overlappedio自动接收---
-			WSABUF wsa_buf;
-			wsa_buf.len = _max_size;
-			wsa_buf.buf = buf;
-			DWORD received_count = 0l;
-			OVERLAPPED overlapped;
-			overlapped.hEvent = ::WSACreateEvent();   //异步选择，统一等待
-			overlapped.Pointer = buf;  //带入参数，同时以相同方式带出参数
-			DWORD flags = 0;
+			DWORD bytes;
+			NetWork::PCompletionKey pComKey;
 
-			while (::GetQueuedCompletionStatus(_hIocp, &cReceived,
-				reinterpret_cast<PULONG_PTR>(&sock_complete),
-				&poverlapped_data, INFINITE))
+			NetWork::PIOData tpIoData;
+			DWORD flags;
+			int ret;
+			DWORD RecvBytes;
+			while (true)
 			{
-				//  成功接收-----处理事件
-				if (cReceived > 0)
-				{
-					// 接受的消息
-					NetWork::PMessageData rcv = reinterpret_cast<NetWork::PMessageData>(poverlapped_data->Pointer);
+				pComKey = nullptr;
+				tpIoData = nullptr;
+				bytes = -1;
+				ret = ::GetQueuedCompletionStatus(_hIocp, &bytes, reinterpret_cast<PULONG_PTR>(&pComKey),
+					reinterpret_cast<LPOVERLAPPED*>(&tpIoData), INFINITE);
 
-					fs.open(TAR, std::fstream::in | std::fstream::out | std::fstream::app
-						| std::fstream::binary);
-					if (!fs)
+				if (!ret)
+				{ // 接收有问题
+					DWORD dwError = ::GetLastError();
+					if (WAIT_TIMEOUT == dwError)
+						continue;
+					if (tpIoData != nullptr)
 					{
-						std::cout << "Open Error" << std::endl;
+						// 取消等待执行的异步操作
+						CancelIo(reinterpret_cast<HANDLE>(pComKey->sock));
+						::closesocket(pComKey->sock);
+						::GlobalFree(pComKey);
 						continue;
 					}
-					int count = 0;
-					while (rcv->message[count])
+					break;
+				}
+				else
+				{
+					if (bytes == 0 && (tpIoData->operatorType == READ ||
+						tpIoData->operatorType == WRITE))
 					{
-						if (fs.is_open())
-						{
-							fs.write(rcv->message[count], 1024);
-							++count;
-						}
+						std::cout << "Send disconnect." << std::endl;
+						::closesocket(pComKey->sock);
+						::GlobalFree(pComKey);
+						::GlobalFree(tpIoData);
+						continue;
 					}
-					fs.close();
-					// 转换编码并拷贝到剪贴板
-					transCode();
-					//int send_len = ::send(sock_complete, "Exit!", strlen("Exit!") + 1, 0);
-					delete[] poverlapped_data->Pointer;
-					// 删除文件夹（包含文件）
-					/*delete _sock_addr[sock_complete];
-					_sock_addr[sock_complete] = nullptr;*/
-
-					// 重新启动接收
-					int ret = ::WSARecv(sock_complete, &wsa_buf, 1, &received_count,
-						&flags, &overlapped, nullptr);
-					if (ret != 0)
-					{// WSARecv接收成功返回0
-						int i = ::WSAGetLastError();
-						printf("Error: %d", i);
+					else
+					{// 正常接收消息，开始处理
+						runEvent(tpIoData, pComKey);
 					}
 				}
 			}
-			::closesocket(sock_complete);
+			//DWORD cReceived = 0;
+			//SOCKET sock_complete = INVALID_SOCKET;
+			//LPOVERLAPPED poverlapped_data;
+			//std::fstream fs;
+			//char buf[_max_size]{ 0 };
+			////---overlappedio自动接收---
+			//WSABUF wsa_buf;
+			//wsa_buf.len = _max_size;
+			//wsa_buf.buf = buf;
+			//DWORD received_count = 0l;
+			//OVERLAPPED overlapped;
+			//overlapped.hEvent = ::WSACreateEvent();   //异步选择，统一等待
+			//overlapped.Pointer = buf;  //带入参数，同时以相同方式带出参数
+			//DWORD flags = 0;
+			//
+			//while (true)
+			//{
+			//	int stsResult = ::GetQueuedCompletionStatus(_hIocp, &cReceived,
+			//		reinterpret_cast<PULONG_PTR>(&sock_complete),
+			//		&poverlapped_data, INFINITE);
+			//	if (stsResult == 0)
+			//	{// 连接被关闭
+			//		if (cReceived == 0)
+			//		{// 客户端调用closesocket，释放资源
+			//			printf("Send Close\n");
+			//		}
+			//		if ((GetLastError() == WAIT_TIMEOUT) || (GetLastError() == ERROR_NETNAME_DELETED))
+			//		{// 客户端断开，释放资源
+			//			printf("Send Stop\n");
+			//		}
+			//		delete[] poverlapped_data->Pointer;
+			//		::closesocket(sock_complete);
+			//		continue;
+			//	}
+			//	else
+			//	{
+			//		//  成功接收-----处理事件
+			//		if (cReceived > 0)
+			//		{
+			//			// 接受的消息
+			//			char* messageRcv = reinterpret_cast<char*>(poverlapped_data->Pointer);
+			//			if (messageRcv == nullptr)
+			//			{
+			//				printf("Receive Failed");
+			//				continue;
+			//			}
+			//			fs.open(TAR, std::fstream::in | std::fstream::out | std::fstream::app
+			//				| std::fstream::binary);
+			//			if (!fs)
+			//			{
+			//				std::cout << "Open Error" << std::endl;
+			//				continue;
+			//			}
+			//			if (fs.is_open())
+			//			{
+			//				int len = strlen(messageRcv) + 1;
+			//				fs.write(messageRcv, len);
+			//				fs.close();
+			//			}
+			//			// 转换编码并拷贝到剪贴板
+			//			transCode();
+			//		}
+			//		received_count = 0;
+			//		flags = 0;
+			//		// 重新启动接收
+			//		int ret = ::WSARecv(sock_complete, &wsa_buf, 1, &received_count,
+			//			&flags, &overlapped, nullptr);
+			//		if (ret != 0)
+			//		{// WSARecv接收成功返回0
+			//			int i = ::WSAGetLastError();
+			//			printf("Error: %d\n", i);
+			//		}
+			//	}
+			//}
 		});
-
 }
 
 void
 NetWork::receivePoint::
-getIp(std::string& str, int iResult)
+runEvent(NetWork::PIOData tpIoData, NetWork::PCompletionKey pComKey)
 {
-	INT iRetval;
-	DWORD dwRetval;
-	int i = 1;
-	struct addrinfo* result = NULL;
-	struct addrinfo* ptr = NULL;
-	struct addrinfo hints;
-
-	struct sockaddr_in* sockaddr_ipv4;
-	//    struct sockaddr_in6 *sockaddr_ipv6;
-	LPSOCKADDR sockaddr_ip;
-
-	wchar_t ipstringbuffer[46];
-	DWORD ipbufferlength = 46;
-
-
-	//  存放主机名的缓冲区
-	char szHost[256];
-	//  取得本地主机名称
-	::gethostname(szHost, 256);
-
-	//-------------------------------
-	ZeroMemory(&hints, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_protocol = IPPROTO_TCP;
-
-	dwRetval = getaddrinfo(szHost, nullptr, &hints, &result);
-	if (dwRetval != 0) {
-		printf("getaddrinfo failed with error: %d\n", dwRetval);
-		WSACleanup();
-		return;
-	}
-
-	for (ptr = result; ptr != NULL; ptr = ptr->ai_next)
+	if (tpIoData->operatorType == READ)
 	{
-		switch (ptr->ai_family) {
-		case AF_UNSPEC:
-			printf("Unspecified\n");
-			break;
-		case AF_INET:
-			printf("AF_INET (IPv4)\n");
-			sockaddr_ipv4 = (struct sockaddr_in*)ptr->ai_addr;
-			str = inet_ntoa(sockaddr_ipv4->sin_addr);
-			printf("IPv4 address %s\n", str.c_str());
-			break;
-		case AF_INET6:
-			printf("AF_INET6 (IPv6)\n");
-			sockaddr_ip = (LPSOCKADDR)ptr->ai_addr;
-			ipbufferlength = 46;
-			iRetval = WSAAddressToString(sockaddr_ip, (DWORD)ptr->ai_addrlen, NULL,
-				ipstringbuffer, &ipbufferlength);
-			if (iRetval)
-				printf("WSAAddressToString failed with %u\n", WSAGetLastError());
-			else
-				std::wcout << L"IPv6 address  " << ipstringbuffer << std::endl;
-			break;
-		case AF_NETBIOS:
-			printf("AF_NETBIOS (NetBIOS)\n");
-			break;
-		default:
-			printf("Other %ld\n", ptr->ai_family);
-			break;
+		if (strcmp(tpIoData->dataBuffer, "Connect the Send!") == 0)
+		{
+			remove(TAR);
+			std::cout << tpIoData->dataBuffer << std::endl;
+			Send(tpIoData, pComKey);
+		}
+		else if (strcmp(tpIoData->dataBuffer, "Send Complete!") == 0)
+		{
+			transCode();
+			Recv(tpIoData, pComKey);
+		}
+		else if (strcmp(tpIoData->dataBuffer, "Start Send Message!") == 0)
+		{
+			remove(TAR);
+			Recv(tpIoData, pComKey);
+		}
+		else
+		{
+			std::fstream fs;
+			// 写入文件，剪贴板
+			fs.open(TAR, std::fstream::in | std::fstream::out | std::fstream::app
+				| std::fstream::binary);
+			if (!fs)
+			{
+				std::cout << "Open Error" << std::endl;
+				return;
+			}
+			if (fs.is_open())
+			{
+				fs.write(tpIoData->dataBuffer, 1024);
+				fs.close();
+			}
+			Recv(tpIoData, pComKey);
 		}
 	}
-	freeaddrinfo(result);
+	else if (tpIoData->operatorType == WRITE)
+	{
+		// 接收操作
+		Recv(tpIoData, pComKey);
+	}
+	else if (tpIoData->operatorType == ACCEPT)
+	{
+		
+		std::cout << "accpet success." << std::endl;
+		if (::setsockopt(tpIoData->csock, SOL_SOCKET,
+			SO_UPDATE_ACCEPT_CONTEXT,
+			reinterpret_cast<char*>(&pComKey->sock),
+			sizeof(pComKey->sock)) == SOCKET_ERROR)
+		{
+			std::cout << "SetSockOpt Error." << std::endl;
+		}
+
+		NetWork::PCompletionKey tmpIOData = reinterpret_cast<NetWork::PCompletionKey>(::GlobalAlloc(GPTR, sizeof(NetWork::CompletionKey)));
+		tmpIOData->sock = tpIoData->csock;
+
+		sockaddr_in* addrClient = NULL, * addrLocal = NULL;
+		int nClientLen = sizeof(SOCKADDR_IN), nLocalLen = sizeof(SOCKADDR_IN);
+
+		lpfnGetAcceptExSockaddrs(tpIoData->dataBuffer, 0, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16,
+			(LPSOCKADDR*)&addrLocal, &nLocalLen, (LPSOCKADDR*)&addrClient, &nClientLen);
+
+		printf(tmpIOData->IP, " %d\n", addrClient->sin_port);	//cliAdd.sin_port );
+
+		::CreateIoCompletionPort(reinterpret_cast<HANDLE>(tmpIOData->sock), _hIocp, reinterpret_cast<ULONG_PTR>(tmpIOData), 0);
+		Recv(tpIoData, tmpIOData);
+		// 接收到一个连接，再发起一个异步操作
+		startReceiver();
+	}
 }
 
 void
@@ -266,7 +306,6 @@ transCode(void)
 	fs1.close();
 	sendToClip(str.c_str());
 	std::cout << "Success Copy." << std::endl;
-	printf("\n");
 	return;
 }
 
@@ -302,6 +341,53 @@ sendToClip(const wchar_t* data_str)
 	return false;
 }
 
+BOOL
+NetWork::receivePoint::
+Recv(NetWork::PIOData tpIoData, NetWork::PCompletionKey pComKey)
+{
+	DWORD flags = 0;
+	DWORD recvBytes = 0;
+	ZeroMemory(&tpIoData->overlapped, sizeof(OVERLAPPED));
+
+	tpIoData->operatorType = READ;
+	tpIoData->buf.buf = tpIoData->dataBuffer;
+	tpIoData->buf.len = tpIoData->dataLength = _max_size;
+
+	if (SOCKET_ERROR == ::WSARecv(pComKey->sock, &tpIoData->buf, 1, &recvBytes, &flags, &tpIoData->overlapped, nullptr))
+	{
+		if (ERROR_IO_PENDING != WSAGetLastError())
+		{
+			printf("发起重叠接收失败!   %d\n", ::GetLastError());
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+
+BOOL
+NetWork::receivePoint::
+Send(NetWork::PIOData tpIoData, NetWork::PCompletionKey pComKey)
+{
+	DWORD flags = 0;
+	DWORD recvBytes = 0;
+	ZeroMemory(&tpIoData->overlapped, sizeof(OVERLAPPED));
+
+	tpIoData->operatorType = WRITE;
+	tpIoData->buf.len = _max_size;
+	strncpy_s(tpIoData->buf.buf, 1024, "Connect the Receiver!", 1024);
+
+	if (SOCKET_ERROR == WSASend(pComKey->sock, &tpIoData->buf, 1, &recvBytes, flags, &tpIoData->overlapped, NULL))
+	{
+		if (ERROR_IO_PENDING != WSAGetLastError())
+		{
+			printf("发起发送重叠失败!\n");
+			return FALSE;
+		}
+	}
+
+	return TRUE;
+}
+
 NetWork::receivePoint::
 receivePoint() : _thdPool(10)
 {
@@ -312,14 +398,32 @@ receivePoint() : _thdPool(10)
 		return;
 	}
 
-	_sock = ::socket(AF_INET, SOCK_STREAM, 0);
+	_hIocp = ::CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0);
+
+	if (_hIocp == nullptr)
+	{
+		printf("Create CompletionPort Failed %d\n", ::WSAGetLastError());
+		return;
+	}
+
+	threadEvent();
+
+	_sock = ::WSASocket(AF_INET, SOCK_STREAM, 0, nullptr, 0, WSA_FLAG_OVERLAPPED);
+	//_sock = ::socket(AF_INET, SOCK_STREAM, 0);
 	if (_sock == INVALID_SOCKET)
 		return;
+	// 将监听socket与完成端口绑定
+	// 是否私有变量？
+	NetWork::PCompletionKey scKey;
+	scKey = reinterpret_cast<NetWork::PCompletionKey>(::GlobalAlloc(GPTR, sizeof(NetWork::CompletionKey)));
+	scKey->sock = _sock;
+	::CreateIoCompletionPort(reinterpret_cast<HANDLE>(_sock), _hIocp, reinterpret_cast<ULONG_PTR>(scKey), 0);
 
 	int net_buf;
 	std::string str_addr;
+	std::wstring IPv6; // 暂时未用到
 
-	getIp(str_addr, wsaResult);
+	NetWork::getIP(str_addr, IPv6);
 
 	if (::InetPtonA(AF_INET, str_addr.c_str(), &net_buf) != 1)
 		return;
@@ -338,8 +442,34 @@ receivePoint() : _thdPool(10)
 		return;
 	}
 
-	_hIocp = ::CreateIoCompletionPort(INVALID_HANDLE_VALUE, nullptr, 0, 0);
-	//std::cout << "Start the Server" << std::endl;
+	lpfnAcceptEx = nullptr;
+	guidAcceptEx = WSAID_ACCEPTEX;
+	dwBytes = 0;
+	if (::WSAIoctl(_sock, SIO_GET_EXTENSION_FUNCTION_POINTER, &guidAcceptEx, sizeof(guidAcceptEx), &lpfnAcceptEx,
+		sizeof(lpfnAcceptEx), &dwBytes, nullptr, nullptr) == 0)
+	{
+		std::cout << "AcceptEx Success." << std::endl;
+	}
+	else
+	{
+		printf("AcceptEx Failed. %d\n", ::WSAGetLastError());
+		return;
+	}
+
+	lpfnGetAcceptExSockaddrs = nullptr;
+	guidGetAcceptExSockaddrs = WSAID_GETACCEPTEXSOCKADDRS;
+
+	if (::WSAIoctl(_sock, SIO_GET_EXTENSION_FUNCTION_POINTER, &guidGetAcceptExSockaddrs,
+		sizeof(guidGetAcceptExSockaddrs), &lpfnGetAcceptExSockaddrs,
+		sizeof(lpfnGetAcceptExSockaddrs), &dwBytes1, nullptr, nullptr) == 0)
+	{
+		std::cout << "GetAcceptExSockAddrs Success." << std::endl;
+	}
+	else
+	{
+		printf("GetAcceptExSockAddrs Failed. %d\n", ::WSAGetLastError());
+		return;
+	}
 }
 
 NetWork::receivePoint::

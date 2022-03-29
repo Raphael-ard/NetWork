@@ -15,6 +15,7 @@ namespace NetWork
 		static std::shared_ptr<pointManager> getInstance(void);
 		static void deleteInstance(void);
 
+		void runProgress(void);
 		void addSendPoint(std::shared_ptr<sendPoint> sPoint);
 		void removeSendPoint(std::shared_ptr<sendPoint> sPoint);
 		void clearSendPoint(void);

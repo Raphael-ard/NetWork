@@ -19,7 +19,6 @@ namespace NetWork
 		std::wstring getMyDirectory(void);
 		void initOperateFile(void);
 		void listenFile(void);
-		void getIP(void);
 
 	private:
 		WSADATA							_wsaData;

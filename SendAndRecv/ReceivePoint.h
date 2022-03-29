@@ -4,7 +4,9 @@
 
 #include <mutex>
 #include <winsock2.h>
+#include <mswsock.h>
 
+#include "AllData.h"
 #include "UserId.h"
 #include "ThreadPool.h"
 
@@ -16,13 +18,16 @@ namespace NetWork
 	public:
 		static receivePoint* getInstace(void);
 		static void destoryIns(void);
-		void startServer(void);
+		void startReceiver(void);
 		
 	private:
-		void runEvent(void);
-		void getIp(std::string& str, int iResult);
+		void threadEvent(void);
+		void runEvent(NetWork::PIOData tpIoData, NetWork::PCompletionKey pComKey);
 		void transCode(void);
 		bool sendToClip(const wchar_t* data_str);
+
+		BOOL Recv(NetWork::PIOData tpIoData, NetWork::PCompletionKey pComKey);
+		BOOL Send(NetWork::PIOData tpIoData, NetWork::PCompletionKey pComKey);
 
 	private:
 		receivePoint(void);
@@ -39,6 +44,13 @@ namespace NetWork
 		SOCKET										_sock;
 		sockaddr_in									_addr{ 0 };
 
+		LPFN_ACCEPTEX								lpfnAcceptEx;
+		DWORD										dwBytes;
+		GUID										guidAcceptEx;
+
+		DWORD										dwBytes1;
+		LPFN_GETACCEPTEXSOCKADDRS					lpfnGetAcceptExSockaddrs;
+		GUID										guidGetAcceptExSockaddrs;
 		HANDLE										_hIocp;
 		NetWork::threadPool							_thdPool;
 	};	

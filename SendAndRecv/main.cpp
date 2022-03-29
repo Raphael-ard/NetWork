@@ -9,7 +9,7 @@
 int main(void)
 {
 	int option = -1;
-	std::cout << "Send: 1 Or Receive: Other";
+	std::cout << "Send: 1 Or Receive: Other:  ";
 	std::cin >> option;
 	if (option == 1)
 	{// 工厂模式建造发送端
@@ -19,14 +19,18 @@ int main(void)
 			std::cout << "Create Send Facotry Failed" << std::endl;
 			return -1;
 		}
+		std::cout << "This is Send" << std::endl;
 		std::shared_ptr<NetWork::sendPoint> sPoint = factory->createSendPoint();
 		NetWork::pointManager::getInstance()->addSendPoint(std::shared_ptr<NetWork::sendPoint>(sPoint));
-
+		NetWork::pointManager::getInstance()->runProgress();
 	}
 	else
 	{// 单例模式建造接收端
+		std::cout << "This is Receiver" << std::endl;
 		NetWork::receivePoint* recvPoint = NetWork::receivePoint::getInstace();
-		recvPoint->startServer();
+		recvPoint->startReceiver();
+		while (true);
+		// 主线程阻塞
 	}
 	return 0;
 }

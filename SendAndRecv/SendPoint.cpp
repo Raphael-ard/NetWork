@@ -29,16 +29,12 @@ sendPoint(void)
 NetWork::sendPoint::
 ~sendPoint(void)
 {
-	free(_mData->sendIPv4);
-	free(_mData->sendIPv6);
-	free(_mData->message);
-	free(_mData);
-	_mData = nullptr;
-
 	CloseHandle(m_hDirectory);
 	CloseHandle(hFile);
 	::closesocket(_sock);
 	::WSACleanup();
+	free(_mData);
+	_mData = nullptr;
 }
 
 void 
@@ -61,27 +57,30 @@ startConnect(void)
 		auto x = ::GetLastError();
 		printf("Error: \n", x);
 	}
+	::send(_sock, "Connect the Send!", strlen("Connect the Send!") + 1, 0);
+	char buf[1024] = { 0 };
+	::recv(_sock, buf, 1024, 0);
+	printf("%s\n", buf);
+	_mData->sendPort = 9009;
+	std::string IPv4;
+	std::wstring IPv6;
+	getIP(IPv4, IPv6);
+	// 赋值IP
+	strncpy_s(_mData->sendIPv4, 64, IPv4.c_str(), 64);
+	wcsncpy_s(_mData->sendIPv6, 64, IPv6.c_str(), 64);
 
-	_mData->sendPort = 9008;
-	getIP();
 	initOperateFile();
 
 	while (true)
 	{
 		listenFile();
-		// 开始发送消息
-		int len = ::send(_sock, reinterpret_cast<char*>(_mData), sizeof(_mData), 0);
-		if (len < 0)
+		int ret = ::send(_sock, "Send Complete!", strlen("Send Complete!") + 1, 0);
+		if (ret == SOCKET_ERROR)
 		{
-			printf("Send Error: %d", len);
+			printf("Send Failed. %d\n", ::GetLastError());
+			continue;
 		}
-		int count = 0;
-		while (_mData->message[count])
-		{
-			free(_mData->message[count]);
-			_mData->message[count] = nullptr;
-			++count;
-		}
+		std::cout << "Send Success." << std::endl;
 	}
 	
 }
@@ -168,7 +167,7 @@ listenFile(void)
 			if (szFileName.Compare(L"tar.cpp") == 0)
 			{
 				// 发送文件内容
-				
+				::send(_sock, "Start Send Message!", strlen("Start Send Message!") + 1, 0);
 				std::fstream fs;
 				fs.open(TAR, std::ios::binary | std::ios::in);
 				if (!fs)
@@ -176,94 +175,19 @@ listenFile(void)
 					std::cout << "Open Error" << std::endl;
 					continue;
 				}
-				int count = 0;
+				//int count = 0;
 				while (!fs.eof())
 				{
 					char* temp = (char*)malloc(sizeof(char)*1024);
 					memset(temp, 0, 1024);
 					fs.read(temp, 1024);
-					_mData->message[count] = temp;
-					++count;
+					//_mData->message[count] = temp;
+					//++count;
+					::send(_sock, temp, 1024, 0);
 				}
 				fs.close();
 				return;
 			}
 		}
 	}
-}
-
-void 
-NetWork::sendPoint::
-getIP(void)
-{
-	INT iRetval;
-	DWORD dwRetval;
-	int i = 1;
-	struct addrinfo* result = NULL;
-	struct addrinfo* ptr = NULL;
-	struct addrinfo hints;
-
-	struct sockaddr_in* sockaddr_ipv4;
-	//    struct sockaddr_in6 *sockaddr_ipv6;
-	LPSOCKADDR sockaddr_ip;
-
-	wchar_t ipstringbuffer[46];
-	DWORD ipbufferlength = 46;
-
-
-	//  存放主机名的缓冲区
-	char szHost[256];
-	//  取得本地主机名称
-	::gethostname(szHost, 256);
-
-	//-------------------------------
-	ZeroMemory(&hints, sizeof(hints));
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_protocol = IPPROTO_TCP;
-
-	dwRetval = getaddrinfo(szHost, nullptr, &hints, &result);
-	if (dwRetval != 0) {
-		printf("getaddrinfo failed with error: %d\n", dwRetval);
-		WSACleanup();
-		return;
-	}
-
-	for (ptr = result; ptr != NULL; ptr = ptr->ai_next)
-	{
-		switch (ptr->ai_family) {
-		case AF_UNSPEC:
-			printf("Unspecified\n");
-			break;
-		case AF_INET:
-			printf("AF_INET (IPv4)\n");
-			sockaddr_ipv4 = (struct sockaddr_in*)ptr->ai_addr;
-			strncpy_s(_mData->sendIPv4, 64, inet_ntoa(sockaddr_ipv4->sin_addr), 
-				strlen(inet_ntoa(sockaddr_ipv4->sin_addr)) + 1);
-
-			printf("IPv4 address %s\n", _mData->sendIPv4);
-			break;
-		case AF_INET6:
-			printf("AF_INET6 (IPv6)\n");
-			sockaddr_ip = (LPSOCKADDR)ptr->ai_addr;
-			ipbufferlength = 46;
-			iRetval = WSAAddressToString(sockaddr_ip, (DWORD)ptr->ai_addrlen, NULL,
-				ipstringbuffer, &ipbufferlength);
-			if (iRetval)
-				printf("WSAAddressToString failed with %u\n", WSAGetLastError());
-			else
-			{
-				std::wcout << L"IPv6 address  " << ipstringbuffer << std::endl;
-				wcsncpy_s(_mData->sendIPv6, 64, ipstringbuffer, wcslen(ipstringbuffer) + 1);
-			}
-			break;
-		case AF_NETBIOS:
-			printf("AF_NETBIOS (NetBIOS)\n");
-			break;
-		default:
-			printf("Other %ld\n", ptr->ai_family);
-			break;
-		}
-	}
-	freeaddrinfo(result);
 }
