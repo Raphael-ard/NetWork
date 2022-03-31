@@ -156,6 +156,191 @@ namespace NetWork
 		}
 		freeaddrinfo(result);
 	}
+	
+	// Capture Screen
+	struct dp_rect_t
+	{
+		RECT   rc;             ///发生变化的矩形框
+		/////
+		char* line_buffer;    ///矩形框数据起始地址
+		int    line_bytes;     ///每行（矩形框width对应）的数据长度
+		int    line_nextpos;   ///从0开始，第N行的数据地址: line_buffer + N*line_nextpos 。
+		int    line_count;     ///等于矩形框高度 height
+	};
+
+	struct dp_frame_t
+	{
+		int        cx;          ///屏幕宽度
+		int        cy;          ///屏幕高度
+		int        line_bytes;  ///每个扫描行的实际数据长度
+		int        line_stride; ///每个扫描行的4字节对齐的数据长度
+		int        bitcount;    ///8.16.24.32 位深度, 8位是256调色板； 16位是555格式的图像
+
+		int        length;      ///屏幕数据长度 line_stride*cy
+		char* buffer;      ///屏幕数据
+		/////
+		int        rc_count;    ///变化区域个数
+		dp_rect_t* rc_array;    ///变化区域
+
+		///
+		void* param;   ///
+	};
+
+	struct dp_create_t
+	{
+		int       grab_type;      ///抓屏方法， 0 自动选择， 1 mirror， 2 DX抓屏， 3 GDI抓屏
+
+		////
+		DP_DISPLAYCHANGE   display_change;
+		DP_FRAME           frame;
+		void* param;
+		///
+	};
+
+
+	//镜像驱动抓屏
+	struct __mirror_cap_t
+	{
+		bool             is_active;
+		DISPLAY_DEVICE   disp;
+		////
+
+		LONG             last_index;
+		time_t           last_check_drawbuf_time;
+
+		/////
+		draw_buffer_t* buffer;
+		byte* front_framebuf;
+		byte* back_framebuf;
+
+	};
+
+	// DX抓屏
+	struct __d3d_cap_t
+	{
+		int                 cx;
+		int                 cy;
+		int                 bitcount;
+		int                 line_bytes;
+		int                 line_stride;
+
+		////DXGI
+		int                       is_acquire_frame;
+		ID3D11Device* d11dev;
+		ID3D11DeviceContext* d11ctx;
+		IDXGIOutputDuplication* dxgi_dup;
+		DXGI_OUTPUT_DESC          dxgi_desc;
+		ID3D11Texture2D* dxgi_text2d;
+		IDXGISurface* dxgi_surf;
+
+		byte* buffer; ///
+		byte* bak_buf;
+	};
+
+	///GDI 抓屏
+	struct __gdi_cap_t
+	{
+		int        cx;
+		int        cy;
+		int        line_bytes;
+		int        line_stride;
+		int        bitcount; ////
+		HDC        memdc;
+		HBITMAP    hbmp;
+		///
+		byte* buffer; ///
+		byte* back_buf; ///
+	};
+
+	struct __tbuf_t
+	{
+		int    size;
+		void* buf;
+	};
+	struct __xdisp_t
+	{
+		bool             quit;
+
+		bool             is_pause_grab; //是否暂停抓屏
+		int              grab_type; //// 抓屏方法， 0 自动选择， 1 mirror， 2 DX抓屏， 3 GDI抓屏
+
+		__mirror_cap_t   mirror;
+
+		__d3d_cap_t      directx;
+
+		__gdi_cap_t      gdi;
+
+		/////
+		LONG             sleep_msec;  ///
+
+		////
+		HWND             hMessageWnd;
+		HANDLE           h_thread;
+		DWORD            id_thread;
+		HANDLE           hEvt;
+
+		///
+		DP_DISPLAYCHANGE display_change; ///
+		DP_FRAME         frame;
+		void* param;
+
+		///
+		__tbuf_t         t_arr[2];
+		/////
+	};
+
+
+
+	#define CHANGE_QUEUE_SIZE          50000
+
+	/// op_type
+	#define  OP_TEXTOUT        1
+	#define  OP_BITBLT         2
+	#define  OP_COPYBITS       3
+	#define  OP_STROKEPATH     4
+	#define  OP_LINETO         5
+	#define  OP_FILLPATH       6
+	#define  OP_STROKEANDFILLPATH  7
+	#define  OP_STRETCHBLT     8
+	#define  OP_ALPHABLEND     9
+	#define  OP_TRANSPARENTBLT 10
+	#define  OP_GRADIENTFILL   11
+	#define  OP_PLGBLT         12
+	#define  OP_STRETCHBLTROP  13
+	#define  OP_RENDERHINT     14
+
+	#define ESCAPE_CODE_MAP_USERBUFFER     0x0DAACC00
+	#define ESCAPE_CODE_UNMAP_USERBUFFER   0x0DAACC10
+
+	struct draw_change_t
+	{
+		unsigned int    op_type; /// 各种GDI操作类型,其实没啥用
+		///
+		RECT            rect;    /// 发生变化的区域
+	};
+
+	struct draw_queue_t
+	{
+		unsigned int       next_index;                 /// 下一个将要绘制的位置, 从 0到 ( CHANGE_QUEUE_SIZE - 1 ),循环队列指示器
+		draw_change_t      draw_queue[CHANGE_QUEUE_SIZE];      /// 
+	};
+
+	struct draw_buffer_t
+	{
+		char                magic[16];   ///没什么意义
+		////
+		unsigned int        cx;          ///屏幕长度
+		unsigned int        cy;          ///屏幕高度
+		unsigned int        line_bytes;  ///每个扫描行的实际数据长度
+		unsigned int        line_stride; ///每个扫描行的4字节对齐的数据长度
+		unsigned int        bitcount;    ///8,16,24,32 
+		//////
+		draw_queue_t        changes;     ///发生变化的矩形框集合
+
+		////
+		unsigned int        data_length; //data_buffer指向的屏幕RGB数据长度，等于 line_stride*cy
+		char                data_buffer[1]; //存放屏幕数据区域
+	};
 }
 
 #endif // !_ALL_DATA_H_
