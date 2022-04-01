@@ -33,6 +33,9 @@
     <ClCompile Include="ThreadPool.cpp" />
     <ClCompile Include="UserId.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="jpeg7.dll" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
