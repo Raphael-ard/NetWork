@@ -1,14 +1,16 @@
-#include "WebTCP.h"
-#include "CaptureMethod.h"
-#include "jpeglib.h"
-
+#include <WinSock.h>
+#include <vector>
 #include <string>
 #include <setjmp.h>
 
-#pragma comment(lib, "jpeg.lib")
-#pragma comment(lib,"ws2_32.lib")
-
 using namespace std;
+
+#include "webTCP.h"
+#include "CaptureMethod.h"
+
+#include "jpeglib.h"
+
+#pragma comment(lib,"ws2_32.lib")
 
 const char* boundary = "++&&**boundary--stream-jpeg++";
 
@@ -23,6 +25,14 @@ typedef struct jpeg_error_t {
 	jmp_buf setjmp_buffer;
 };
 
+static void jpeg_error_exit(j_common_ptr cinfo)
+{
+	jpeg_error_t* myerr = reinterpret_cast<jpeg_error_t*>(cinfo->err);
+	////
+	(*cinfo->err->output_message) (cinfo);
+
+	longjmp(myerr->setjmp_buffer, 1);
+}
 
 NetWork::webTCP::
 webTCP(void)
@@ -39,25 +49,21 @@ NetWork::webTCP::
 	if (_sock)
 		::closesocket(_sock);
 	::DeleteCriticalSection(&cs);
-	::WSACleanup();
 }
 
 int
 NetWork::webTCP::
-start(void)
+start(std::string& IPv4)
 {
 	_sock = ::socket(AF_INET, SOCK_STREAM, 0);
 
 	if (_sock == INVALID_SOCKET)
 		return -1;
 
-	int net_buf;
+	_addr.sin_addr.S_un.S_addr = inet_addr(IPv4.c_str());
 
-	if (::InetPtonA(AF_INET, NetWork::IPv4.c_str(), &net_buf) != 1)
-		return;
-	_addr.sin_addr.S_un.S_addr = net_buf;
 	_addr.sin_family = AF_INET;
-	_addr.sin_port = ::htons(9008);
+	_addr.sin_port = ::htons(8000);
 
 	if (::bind(_sock,
 		reinterpret_cast<const sockaddr*>(&_addr),
@@ -297,14 +303,4 @@ clientThread(void* _p)
 
 	delete p;
 	return 0;
-}
-
-
-static void jpeg_error_exit(j_common_ptr cinfo)
-{
-	jpeg_error_t* myerr = reinterpret_cast<jpeg_error_t*>(cinfo->err);
-	////
-	(*cinfo->err->output_message) (cinfo);
-
-	longjmp(myerr->setjmp_buffer, 1);
 }

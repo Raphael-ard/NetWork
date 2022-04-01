@@ -36,7 +36,7 @@
     <ClInclude Include="turbojpeg.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CaptureMethod.h">
+    <ClInclude Include="CaptureData.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -47,7 +47,7 @@
     <ClCompile Include="UserId.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="CaptureMethod.cpp">
+    <ClCompile Include="AllData.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

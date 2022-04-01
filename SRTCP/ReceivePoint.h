@@ -19,6 +19,9 @@ namespace NetWork
 		static void destoryIns(void);
 		void startReceiver(void);
 		
+		WSADATA getWSAData(void);
+		std::string IPv4;
+
 	private:
 		void threadEvent(void);
 		void runEvent(NetWork::PIOData tpIoData, NetWork::PCompletionKey pComKey);
@@ -50,6 +53,7 @@ namespace NetWork
 		DWORD										dwBytes1;
 		LPFN_GETACCEPTEXSOCKADDRS					lpfnGetAcceptExSockaddrs;
 		GUID										guidGetAcceptExSockaddrs;
+		
 		HANDLE										_hIocp;
 		NetWork::threadPool							_thdPool;
 	};	

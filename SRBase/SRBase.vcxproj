@@ -20,7 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AllData.h" />
-    <ClInclude Include="CaptureMethod.h" />
+    <ClInclude Include="CaptureData.h" />
     <ClInclude Include="jconfig.h" />
     <ClInclude Include="jmorecfg.h" />
     <ClInclude Include="jpeglib.h" />
@@ -29,7 +29,7 @@
     <ClInclude Include="UserId.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="CaptureMethod.cpp" />
+    <ClCompile Include="AllData.cpp" />
     <ClCompile Include="ThreadPool.cpp" />
     <ClCompile Include="UserId.cpp" />
   </ItemGroup>
@@ -149,7 +149,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_WINSOCK_DEPRECATED_NO_WARNINGS;%(PreprocessorDefinitions);_WINSOCK_DEPRECATED_NO_WARNINGS;%(PreprocessorDefinitions);%(PreprocessorDefinitions);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;NDEBUG;_CONSOLE;%(PreprocessorDefinitions);_WINSOCK_DEPRECATED_NO_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>

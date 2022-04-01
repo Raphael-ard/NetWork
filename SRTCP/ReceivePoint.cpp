@@ -1,7 +1,5 @@
 #include "ReceivePoint.h"
 
-#include <ws2tcpip.h>
-#include <iostream>
 #include <fstream>
 
 #pragma comment(lib, "Ws2_32.lib")
@@ -71,6 +69,12 @@ startReceiver(void)
 		if (WSAGetLastError() != ERROR_IO_PENDING)
 			std::cout << "lpfnAcceptEx failed.." << std::endl;
 	}
+}
+
+WSADATA 
+NetWork::receivePoint::getWSAData(void)
+{
+	return _wsaData;
 }
 
 void
@@ -339,19 +343,17 @@ receivePoint() : _thdPool(10)
 	if (_sock == INVALID_SOCKET)
 		return;
 	// 将监听socket与完成端口绑定
-	// 是否私有变量？
 	NetWork::PCompletionKey scKey;
 	scKey = reinterpret_cast<NetWork::PCompletionKey>(::GlobalAlloc(GPTR, sizeof(NetWork::CompletionKey)));
 	scKey->sock = _sock;
 	::CreateIoCompletionPort(reinterpret_cast<HANDLE>(_sock), _hIocp, reinterpret_cast<ULONG_PTR>(scKey), 0);
 
 	int net_buf;
-	std::string str_addr;
-	std::wstring IPv6; // 暂时未用到
 
-	NetWork::getIP(str_addr, IPv6);
+	std::wstring IPv6;
+	NetWork::getIP(IPv4, IPv6);
 
-	if (::InetPtonA(AF_INET, str_addr.c_str(), &net_buf) != 1)
+	if (::InetPtonA(AF_INET, IPv4.c_str(), &net_buf) != 1)
 		return;
 	_addr.sin_addr.S_un.S_addr = net_buf;
 	_addr.sin_family = AF_INET;

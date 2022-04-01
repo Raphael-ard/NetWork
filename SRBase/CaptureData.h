@@ -59,4 +59,5 @@ namespace NetWork
 	};
 }
 
+
 #endif // !_CAPTURE_DATA_H_

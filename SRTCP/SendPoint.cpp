@@ -1,8 +1,6 @@
 #include "SendPoint.h"
 
 #include <WinBase.h>
-#include <iostream>
-#include <WS2tcpip.h>
 #include <atlstr.h>
 #include <fstream>
 
@@ -64,7 +62,7 @@ startConnect(void)
 	_mData->sendPort = 9009;
 	std::string IPv4;
 	std::wstring IPv6;
-	getIP(IPv4, IPv6);
+	NetWork::getIP(IPv4, IPv6);
 	// ¸³ÖµIP
 	strncpy_s(_mData->sendIPv4, 64, IPv4.c_str(), 64);
 	wcsncpy_s(_mData->sendIPv6, 64, IPv6.c_str(), 64);

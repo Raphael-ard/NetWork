@@ -11,11 +11,13 @@
 ///vs2015 如果编译成 XP模式， 得把 dxgi1_2.h 及相关头文件 copy到 7.1a运行库中,然后再适当修改
 #include <dxgi1_2.h>
 
-#include "AllData.h"
+#include "CaptureData.h"
 #include "CaptureMethod.h"
 
 #include <string.h>
 #include <wchar.h>
+
+using namespace NetWork;
 
 #define USE_MIRROR_DIRTY_RECT   1   ///使用mirror镜像驱动自己生成的脏矩形区域
 
@@ -826,7 +828,7 @@ static void capture_mirror(__xdisp_t* dp)
 	///从驱动共享内存获取变化的区域矩形框集合
 	for (i = dp->mirror.last_index; i != curr_index; i++, i = i % CHANGE_QUEUE_SIZE) {
 
-		NetWork::draw_change_t* dc = &dp->mirror.buffer->changes.draw_queue[i]; //printf("*** type=%d, {%d, %d, %d, %d}\n", dc->op_type,dc->rect.left,dc->rect.top,dc->rect.right,dc->rect.bottom );
+		draw_change_t* dc = &dp->mirror.buffer->changes.draw_queue[i]; //printf("*** type=%d, {%d, %d, %d, %d}\n", dc->op_type,dc->rect.left,dc->rect.top,dc->rect.right,dc->rect.bottom );
 		++change_rect_count; ///
 		///
 		if (!region) {
@@ -973,7 +975,22 @@ static void capture_dxgi(__xdisp_t* dp)
 
 		if (!dp->directx.buffer)return;
 		///////
-		goto L;
+		//////
+		dp_frame_t frm;
+		frm.rc_array = rc_array;
+		frm.rc_count = rc_count;
+		frm.cx = dp->directx.cx;
+		frm.cy = dp->directx.cy;
+		frm.line_bytes = dp->directx.line_bytes;
+		frm.line_stride = dp->directx.line_stride;
+		frm.bitcount = dp->directx.bitcount;
+		frm.buffer = (char*)dp->directx.buffer;
+		frm.length = dp->directx.line_stride * dp->directx.cy; ///
+		frm.param = dp->param;
+
+		dp->frame(&frm); /// callback 
+		return;
+		//goto L;
 	}
 	dp->directx.is_acquire_frame = 1; ////
 
@@ -1346,7 +1363,7 @@ static DWORD CALLBACK __loop_msg(void* _p)
 	return 0;
 }
 
-void* dp_create(dp_create_t* ct)
+void* NetWork::dp_create(dp_create_t* ct)
 {
 	__xdisp_t* dp = NULL;
 
@@ -1396,7 +1413,7 @@ void* dp_create(dp_create_t* ct)
 	return dp;
 }
 
-void dp_destroy(void* handle)
+void NetWork::dp_destroy(void* handle)
 {
 	__xdisp_t* dp = (__xdisp_t*)handle;
 	if (!dp)return;
@@ -1424,7 +1441,7 @@ void dp_destroy(void* handle)
 	delete dp;
 }
 
-int dp_grab_interval(void* handle, int grab_msec)
+int NetWork::dp_grab_interval(void* handle, int grab_msec)
 {
 	__xdisp_t* dp = (__xdisp_t*)handle;
 	if (!dp)return -1;
@@ -1434,7 +1451,8 @@ int dp_grab_interval(void* handle, int grab_msec)
 
 	return 0;
 }
-int dp_grap_pause(void* handle, int is_pause)
+
+int NetWork::dp_grap_pause(void* handle, int is_pause)
 {
 	__xdisp_t* dp = (__xdisp_t*)handle;
 	if (!dp)return -1;
@@ -1444,6 +1462,7 @@ int dp_grap_pause(void* handle, int is_pause)
 
 	return 0;
 }
+
 
 //////////
 
@@ -1471,4 +1490,3 @@ int main(int argc, char** argv)
 }
 
 #endif
-
