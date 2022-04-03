@@ -26,10 +26,6 @@ int frame_callback(NetWork::dp_frame_t* frame)
 
 int main(int argc, char* argv[])
 {
-	printf("%s\n", *argv);
-	printf("%d\n", argc);
-	printf("%s\n", argv[argc - 1]);
-	
 	if (argc >= 2)
 	{
 		printf("Web Server\n");

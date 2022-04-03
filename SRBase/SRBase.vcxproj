@@ -34,6 +34,9 @@
     <ClCompile Include="UserId.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <Library Include="jpeg.lib" />
+  </ItemGroup>
+  <ItemGroup>
     <None Include="jpeg7.dll" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
